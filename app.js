@@ -168,33 +168,33 @@ class UIManager {
     this.drawPnlChart(curve.dates, curve.values);
   }
 
-  drawPnlChart(labels, values) {
-    const ctx = document.getElementById("pnlChart").getContext("2d");
-    if (this.pnlChartInstance) this.pnlChartInstance.destroy();
-    this.pnlChartInstance = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: labels,
-        datasets: [{
-          label: "累计收益",
-          data: values,
-          borderColor: "#16213e",
-          backgroundColor: "rgba(22,33,62,0.1)",
-          fill: true,
-          tension: 0.3,
-          pointRadius: 0
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { maxRotation: 30, font: { size: 10 } } }
-        }
+drawPnlChart(labels, values) {
+  const ctx = document.getElementById("pnlChart").getContext("2d");
+  if (this.pnlChartInstance) this.pnlChartInstance.destroy();
+  this.pnlChartInstance = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [{
+        label: "累计收益",
+        data: values,
+        borderColor: "#16213e",
+        backgroundColor: "rgba(22,33,62,0.1)",
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,   // 关键修改
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxRotation: 30, font: { size: 10 } } }
       }
-    });
-  }
+    }
+  });
+}
 
   async loadTrades() {
     const trades = await this.data.getAll("trades");
