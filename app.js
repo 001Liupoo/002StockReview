@@ -11,7 +11,6 @@ class DataManager {
     });
   }
 
-  // ---------- 通用 ----------
   async getAll(table) {
     return await this.db[table].toArray();
   }
@@ -36,7 +35,6 @@ class DataManager {
     return await this.db[table].bulkAdd(items);
   }
 
-  // ---------- 初始化公式 ----------
   async initFormulas(defaultList) {
     const count = await this.db.formulas.count();
     if (count === 0) {
@@ -45,13 +43,11 @@ class DataManager {
     return await this.db.formulas.toArray();
   }
 
-  // ---------- 仪表盘数据 ----------
   async getDashboardData() {
     const trades = await this.db.trades.toArray();
     const signals = await this.db.formulaSignals.toArray();
-    // 计算已实现盈亏（简单）
     let buyAmt = 0, sellAmt = 0;
-    const holdings = {}; // code -> { name, volume, totalCost }
+    const holdings = {};
     trades.forEach(t => {
       const amt = t.price * t.volume;
       if (t.side === "买入") {
@@ -63,14 +59,10 @@ class DataManager {
         sellAmt += amt - (t.fee || 0);
         if (holdings[t.code]) {
           holdings[t.code].volume -= t.volume;
-          // 简单平均成本扣减（先进先出简化）
-          // 这里只用于展示持仓数量，不计入收益
         }
       }
     });
     const realizedPnL = sellAmt - buyAmt;
-
-    // 当前持仓（数量>0）
     const holdingList = Object.keys(holdings)
       .filter(code => holdings[code].volume > 0)
       .map(code => ({
@@ -79,21 +71,15 @@ class DataManager {
         volume: holdings[code].volume,
         avgCost: holdings[code].totalCost / holdings[code].volume
       }));
-
-    // 胜率（基于公式信号）
     const totalSignals = signals.length;
     const successSignals = signals.filter(s => s.result === "成功").length;
     const winRate = totalSignals > 0 ? (successSignals / totalSignals) * 100 : 0;
-
     return { realizedPnL, holdingList, winRate, signals, trades };
   }
 
-  // 获取资金曲线数据（最近30天）
   async getEquityCurve(days = 30) {
     const trades = await this.db.trades.toArray();
     if (trades.length === 0) return { dates: [], values: [] };
-
-    // 按日期排序
     trades.sort((a, b) => a.date.localeCompare(b.date));
     const dailyPnL = {};
     let running = 0;
@@ -103,8 +89,6 @@ class DataManager {
       running += net;
       dailyPnL[t.date] = running;
     });
-
-    // 生成最近days天的连续日期
     const dates = [];
     const values = [];
     const today = new Date();
@@ -118,7 +102,6 @@ class DataManager {
     return { dates, values };
   }
 
-  // 获取下拉选项（公式）
   async getFormulaOptions() {
     return await this.db.formulas.toArray();
   }
@@ -133,7 +116,6 @@ class UIManager {
     this.toastTimer = null;
   }
 
-  // ---------- 导航 ----------
   setupNavigation() {
     document.querySelectorAll(".bottom-nav button").forEach(btn => {
       btn.addEventListener("click", (e) => {
@@ -166,7 +148,6 @@ class UIManager {
     }
   }
 
-  // ---------- Toast 消息 ----------
   showToast(msg, type = "info") {
     const old = document.querySelector(".toast");
     if (old) old.remove();
@@ -178,14 +159,11 @@ class UIManager {
     this.toastTimer = setTimeout(() => div.remove(), 3000);
   }
 
-  // ---------- 仪表盘 ----------
   async loadDashboard() {
     const data = await this.data.getDashboardData();
     document.getElementById("totalPnL").textContent = data.realizedPnL.toFixed(2);
     document.getElementById("winRate").textContent = data.winRate.toFixed(1) + "%";
     document.getElementById("holdingCount").textContent = data.holdingList.length;
-
-    // 绘制曲线
     const curve = await this.data.getEquityCurve(30);
     this.drawPnlChart(curve.dates, curve.values);
   }
@@ -193,7 +171,6 @@ class UIManager {
   drawPnlChart(labels, values) {
     const ctx = document.getElementById("pnlChart").getContext("2d");
     if (this.pnlChartInstance) this.pnlChartInstance.destroy();
-
     this.pnlChartInstance = new Chart(ctx, {
       type: "line",
       data: {
@@ -219,10 +196,9 @@ class UIManager {
     });
   }
 
-  // ---------- 交易流水 ----------
   async loadTrades() {
     const trades = await this.data.getAll("trades");
-    trades.reverse(); // 最新在前
+    trades.reverse();
     const container = document.getElementById("tradeList");
     container.innerHTML = trades.map(t => `
       <div class="list-item" data-id="${t.id}" data-type="trade">
@@ -234,7 +210,7 @@ class UIManager {
       </div>
     `).join("");
 
-    // 删除按钮事件（委托）
+    // 删除
     container.querySelectorAll(".delete-btn").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -249,7 +225,7 @@ class UIManager {
       });
     });
 
-    // 双击编辑（简化：弹出prompt修改备注）
+    // 双击编辑备注（建议3：记录编辑）
     container.querySelectorAll(".list-item").forEach(item => {
       item.addEventListener("dblclick", async () => {
         const id = +item.dataset.id;
@@ -264,11 +240,9 @@ class UIManager {
       });
     });
 
-    // 填充下拉公式
     await this.populateFormulaSelect("tradeFormula");
   }
 
-  // ---------- 多维评分 ----------
   async loadScores() {
     const scores = await this.data.getAll("scores");
     scores.reverse();
@@ -282,7 +256,6 @@ class UIManager {
       </div>
     `).join("");
 
-    // 删除委托
     container.querySelectorAll(".delete-btn").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -297,7 +270,6 @@ class UIManager {
     });
   }
 
-  // ---------- 公式统计 ----------
   async loadFormulas() {
     const signals = await this.data.getAll("formulaSignals");
     signals.reverse();
@@ -324,7 +296,6 @@ class UIManager {
       });
     });
 
-    // 汇总
     const total = signals.length;
     const success = signals.filter(s => s.result === "成功").length;
     const winRate = total > 0 ? (success/total*100).toFixed(1) : 0;
@@ -337,7 +308,6 @@ class UIManager {
     await this.populateFormulaSelect("sigFormulaName");
   }
 
-  // ---------- 错误清单 ----------
   async loadMistakes() {
     const mistakes = await this.data.getAll("mistakes");
     mistakes.reverse();
@@ -365,7 +335,6 @@ class UIManager {
     });
   }
 
-  // ---------- 辅助：填充公式下拉 ----------
   async populateFormulaSelect(selectId, selectedValue = "") {
     const select = document.getElementById(selectId);
     if (!select) return;
@@ -375,7 +344,6 @@ class UIManager {
     ).join("");
   }
 
-  // ---------- 刷新所有 ----------
   async refreshAll() {
     await this.refreshTab(this.currentTab);
   }
@@ -391,20 +359,11 @@ class App {
 
   async init() {
     try {
-      // 初始化公式
       const defaultFormulas = ["倍量突破MA20", "MACD零上金叉", "涨停板回调", "均线多头排列", "量价背离"];
       await this.data.initFormulas(defaultFormulas);
-
-      // 设置导航
       this.ui.setupNavigation();
-
-      // 设置表单提交
       this.setupForms();
-
-      // 设置导入导出
       this.setupImportExport();
-
-      // 刷新所有
       await this.ui.refreshAll();
     } catch (err) {
       console.error("初始化失败:", err);
@@ -412,9 +371,7 @@ class App {
     }
   }
 
-  // ---------- 表单绑定 ----------
   setupForms() {
-    // 交易表单
     const tradeForm = document.getElementById("tradeForm");
     tradeForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -430,7 +387,7 @@ class App {
         fee: parseFloat(form.tradeFee.value) || 0,
         formulaName: form.tradeFormula.value || "",
         note: form.tradeNote.value.trim(),
-        currentPrice: null // 暂不录入，可后续扩展
+        currentPrice: null
       };
       if (!data.date || !data.code || !data.price || !data.volume) {
         this.ui.showToast("请填写完整信息", "error");
@@ -443,7 +400,6 @@ class App {
       this.ui.showToast("交易记录已添加");
     });
 
-    // 评分表单
     const scoreForm = document.getElementById("scoreForm");
     scoreForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -461,7 +417,6 @@ class App {
         plan: document.getElementById("scorePlan").value.trim()
       });
       scoreForm.reset();
-      // 重置滑块显示
       document.querySelectorAll(".slider-group input[type=range]").forEach(slider => {
         const span = document.getElementById(slider.id + "Val");
         if (span) span.textContent = slider.value;
@@ -470,7 +425,6 @@ class App {
       this.ui.showToast("评分已保存");
     });
 
-    // 公式信号表单
     const signalForm = document.getElementById("formulaSignalForm");
     signalForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -488,7 +442,6 @@ class App {
       this.ui.showToast("信号已记录");
     });
 
-    // 错误表单
     const mistakeForm = document.getElementById("mistakeForm");
     mistakeForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -506,7 +459,6 @@ class App {
     });
   }
 
-  // ---------- 导入导出 ----------
   setupImportExport() {
     document.getElementById("exportBtn").addEventListener("click", this.exportAllData.bind(this));
     document.getElementById("importBtn").addEventListener("click", () => {
@@ -544,13 +496,11 @@ class App {
       const text = await file.text();
       const data = JSON.parse(text);
       if (!confirm("导入将清空现有所有数据，确定继续？")) return;
-      // 清空所有表
       await this.data.clear("trades");
       await this.data.clear("scores");
       await this.data.clear("formulaSignals");
       await this.data.clear("mistakes");
       await this.data.clear("formulas");
-      // 批量导入
       if (data.trades) await this.data.bulkAdd("trades", data.trades);
       if (data.scores) await this.data.bulkAdd("scores", data.scores);
       if (data.formulaSignals) await this.data.bulkAdd("formulaSignals", data.formulaSignals);
@@ -561,16 +511,14 @@ class App {
     } catch (err) {
       this.ui.showToast("文件格式错误: " + err.message, "error");
     }
-    event.target.value = ""; // 重置input
+    event.target.value = "";
   }
 }
 
-// ---------- 启动 ----------
 document.addEventListener("DOMContentLoaded", () => {
   window.app = new App();
 });
 
-// 为滑块添加实时显示（保持兼容）
 document.querySelectorAll(".slider-group input[type=range]").forEach(slider => {
   slider.addEventListener("input", function() {
     const span = document.getElementById(this.id + "Val");
