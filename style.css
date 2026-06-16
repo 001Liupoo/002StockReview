@@ -139,3 +139,6 @@ h1 { font-size: 1.3rem; }
   padding: 0.3rem;
 }
 .bottom-nav button.active { color: #16213e; font-weight: bold; }
+.tab-content {
+  min-height: calc(100vh - 120px); /* 减去头部和底部导航的高度 */
+}
