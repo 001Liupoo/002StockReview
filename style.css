@@ -1,7 +1,12 @@
+/* 全局基础 */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+html, body {
+  height: 100%;
+  overflow: hidden;               /* 禁止整体页面滚动，由内部容器控制 */
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -10,6 +15,15 @@ body {
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
+
+/* 应用容器：全高，垂直flex布局 */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 顶部导航栏 */
 header {
   background: #1a1a2e;
   color: white;
@@ -17,9 +31,7 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  flex-shrink: 0;                 /* 不参与收缩 */
 }
 h1 { font-size: 1.3rem; }
 .icon-btn {
@@ -31,24 +43,76 @@ h1 { font-size: 1.3rem; }
   cursor: pointer;
 }
 
-.tab-content { display: none; padding: 1rem; padding-bottom: 70px; }
-.tab-content.active { display: block; }
+/* 所有Tab内容区：占满剩余空间，内部可滚动 */
+.tab-content {
+  flex: 1;                        /* 占据 header 和 nav 之外的全部空间 */
+  overflow-y: auto;               /* 内容超出时滚动 */
+  -webkit-overflow-scrolling: touch;
+  padding: 1rem;
+  display: none;                  /* 默认隐藏，active显示为flex */
+}
+.tab-content.active {
+  display: flex;
+  flex-direction: column;         /* 让内部卡片竖向排列，方便仪表盘内部撑开 */
+}
 
-.card-grid {
+/* 底部导航栏 */
+.bottom-nav {
+  flex-shrink: 0;                 /* 不参与收缩 */
+  background: white;
+  display: flex;
+  justify-content: space-around;
+  padding: 0.4rem 0;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+  z-index: 10;
+}
+.bottom-nav button {
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+  color: #888;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.3rem;
+}
+.bottom-nav button.active { color: #16213e; font-weight: bold; }
+
+/* ========== 仪表盘专属样式 ========== */
+#dashboard.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+#dashboard .card-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 0.5rem;
   margin-bottom: 1rem;
+  flex-shrink: 0;
 }
-.card {
+#dashboard .card {
   background: white;
   border-radius: 12px;
   padding: 1rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
-.card h3 { font-size: 0.9rem; color: #666; margin-bottom: 0.3rem; }
-.card p { font-size: 1.5rem; font-weight: bold; }
+#dashboard .card h3 { font-size: 0.9rem; color: #666; margin-bottom: 0.3rem; }
+#dashboard .card p { font-size: 1.5rem; font-weight: bold; }
 
+/* 资金曲线卡片：自动拉伸填满剩余空间 */
+#dashboard .card:last-child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+#dashboard .card:last-child canvas {
+  flex: 1;                        /* 图表占满卡片 */
+  width: 100% !important;
+  height: 100% !important;       /* 让Chart.js自适应 */
+}
+
+/* ========== 其他Tab通用卡片和表单 ========== */
 .compact-form {
   display: flex;
   flex-wrap: wrap;
@@ -58,6 +122,7 @@ h1 { font-size: 1.3rem; }
   border-radius: 12px;
   margin-bottom: 1rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  flex-shrink: 0;                 /* 表单不参与滚动拉伸 */
 }
 .compact-form input, .compact-form select, .compact-form textarea {
   flex: 1 1 100%;
@@ -87,7 +152,10 @@ h1 { font-size: 1.3rem; }
 }
 .slider-group input[type="range"] { flex: 1; margin: 0 0.5rem; }
 
+/* 列表容器：占据剩余空间，内部可滚动 */
 .list-container {
+  flex: 1;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -116,29 +184,7 @@ h1 { font-size: 1.3rem; }
   cursor: pointer;
 }
 
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: white;
-  display: flex;
-  justify-content: space-around;
-  padding: 0.4rem 0;
-  box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
-  z-index: 10;
-}
-.bottom-nav button {
-  background: none;
-  border: none;
-  font-size: 0.75rem;
-  color: #888;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0.3rem;
-}
-.bottom-nav button.active { color: #16213e; font-weight: bold; }
-.tab-content {
-  min-height: calc(100vh - 120px); /* 减去头部和底部导航的高度 */
+/* 公式统计汇总卡片 */
+#formulaSummary.card {
+  flex-shrink: 0;
 }
