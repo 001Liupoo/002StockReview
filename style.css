@@ -163,3 +163,10 @@ h1 { font-size: 1.3rem; }
   from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+/* 修复资金曲线滚动问题 */
+.chart-wrapper {
+  position: relative;
+  height: 200px;          /* 固定高度，可根据需要调整 */
+  width: 100%;
+  overflow: hidden;       /* 防止溢出 */
+}
