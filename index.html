@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>量化短线复盘</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>量化短线复盘</h1>
+      <div class="header-actions">
+        <button id="exportBtn" class="icon-btn">📤</button>
+        <button id="importBtn" class="icon-btn">📥</button>
+      </div>
+    </header>
+
+    <!-- 仪表盘概览卡片 -->
+    <section id="dashboard" class="tab-content active">
+      <div class="card-grid">
+        <div class="card">
+          <h3>累计收益</h3>
+          <p id="totalPnL">0.00</p>
+        </div>
+        <div class="card">
+          <h3>胜率</h3>
+          <p id="winRate">0%</p>
+        </div>
+        <div class="card">
+          <h3>当前持仓</h3>
+          <p id="holdingCount">0</p>
+        </div>
+      </div>
+      <div class="card">
+        <h3>资金曲线（近30日）</h3>
+        <canvas id="pnlChart" width="300" height="150"></canvas>
+      </div>
+    </section>
+
+    <!-- 交易流水 -->
+    <section id="trades" class="tab-content">
+      <h2>交易流水</h2>
+      <form id="tradeForm" class="compact-form">
+        <input type="date" id="tradeDate" required>
+        <input type="text" id="tradeCode" placeholder="代码" required>
+        <input type="text" id="tradeName" placeholder="名称" required>
+        <select id="tradeDirection"><option value="做多">做多</option><option value="做空">做空</option></select>
+        <select id="tradeSide"><option value="买入">买入</option><option value="卖出">卖出</option></select>
+        <input type="number" id="tradePrice" placeholder="价格" step="0.01" required>
+        <input type="number" id="tradeVolume" placeholder="数量" required>
+        <input type="number" id="tradeFee" placeholder="手续费" value="0" step="0.01">
+        <select id="tradeFormula"></select>
+        <textarea id="tradeNote" placeholder="备注" rows="2"></textarea>
+        <button type="submit">添加</button>
+      </form>
+      <div id="tradeList" class="list-container"></div>
+    </section>
+
+    <!-- 多维评分 -->
+    <section id="scores" class="tab-content">
+      <h2>多维评分</h2>
+      <form id="scoreForm" class="compact-form">
+        <input type="date" id="scoreDate" required>
+        <input type="text" id="scoreCode" placeholder="代码" required>
+        <input type="text" id="scoreName" placeholder="名称" required>
+        <div class="slider-group">
+          <label>大盘 <span id="daPanVal">3</span></label>
+          <input type="range" id="daPan" min="1" max="5" value="3" oninput="daPanVal.textContent=this.value">
+        </div>
+        <div class="slider-group">
+          <label>板块 <span id="banKuaiVal">3</span></label>
+          <input type="range" id="banKuai" min="1" max="5" value="3" oninput="banKuaiVal.textContent=this.value">
+        </div>
+        <div class="slider-group">
+          <label>技术 <span id="jiShuVal">3</span></label>
+          <input type="range" id="jiShu" min="1" max="5" value="3" oninput="jiShuVal.textContent=this.value">
+        </div>
+        <div class="slider-group">
+          <label>量价 <span id="liangJiaVal">3</span></label>
+          <input type="range" id="liangJia" min="1" max="5" value="3" oninput="liangJiaVal.textContent=this.value">
+        </div>
+        <div class="slider-group">
+          <label>情绪 <span id="qingXuVal">3</span></label>
+          <input type="range" id="qingXu" min="1" max="5" value="3" oninput="qingXuVal.textContent=this.value">
+        </div>
+        <textarea id="scorePlan" placeholder="明日预案" rows="2"></textarea>
+        <button type="submit">保存评分</button>
+      </form>
+      <div id="scoreList" class="list-container"></div>
+    </section>
+
+    <!-- 公式统计 -->
+    <section id="formulas" class="tab-content">
+      <h2>公式统计</h2>
+      <form id="formulaSignalForm" class="compact-form">
+        <input type="date" id="sigDate" required>
+        <select id="sigFormulaName"></select>
+        <input type="text" id="sigStock" placeholder="股票" required>
+        <select id="sigResult"><option value="成功">成功</option><option value="失败">失败</option><option value="持有中">持有中</option></select>
+        <input type="number" id="sigDays" placeholder="持有天数" step="1">
+        <input type="number" id="sigPnLRatio" placeholder="盈亏比" step="0.01">
+        <button type="submit">添加信号</button>
+      </form>
+      <div id="formulaSummary" class="card"></div>
+      <div id="formulaList" class="list-container"></div>
+    </section>
+
+    <!-- 错误清单 -->
+    <section id="mistakes" class="tab-content">
+      <h2>错误清单</h2>
+      <form id="mistakeForm" class="compact-form">
+        <input type="date" id="mistakeDate" required>
+        <input type="text" id="mistakeStock" placeholder="股票" required>
+        <select id="mistakeType">
+          <option value="追高买入">追高买入</option>
+          <option value="止损拖延">止损拖延</option>
+          <option value="模式外交易">模式外交易</option>
+          <option value="仓位失控">仓位失控</option>
+          <option value="其他">其他</option>
+        </select>
+        <textarea id="mistakeDesc" placeholder="详细描述" rows="2"></textarea>
+        <textarea id="mistakeRule" placeholder="违反的纪律" rows="2"></textarea>
+        <textarea id="mistakeFix" placeholder="改进措施" rows="2"></textarea>
+        <button type="submit">记录错误</button>
+      </form>
+      <div id="mistakeList" class="list-container"></div>
+    </section>
+
+    <!-- 底部导航 -->
+    <nav class="bottom-nav">
+      <button data-tab="dashboard" class="active">📊 概览</button>
+      <button data-tab="trades">📝 流水</button>
+      <button data-tab="scores">📈 评分</button>
+      <button data-tab="formulas">⚙️ 公式</button>
+      <button data-tab="mistakes">📉 错误</button>
+    </nav>
+
+    <!-- 隐藏的文件导入 -->
+    <input type="file" id="importFileInput" accept=".json,.csv" style="display:none">
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
