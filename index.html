@@ -61,7 +61,7 @@
       </div>
     </div>
 
-    <!-- 绩效摘要卡片 -->
+    <!-- 绩效摘要 -->
     <div class="card" id="statsCard">
       <div class="flex-row" style="margin-bottom:6px"><strong>📈 绩效汇总</strong><span id="capitalDisplay" style="font-size:0.8rem"></span></div>
       <div class="flex-row" id="statsContainer">
@@ -73,9 +73,7 @@
         <div class="stat-box"><div class="stat-label">最大回撤</div><div class="stat-value red" id="maxDrawdown">0%</div></div>
         <div class="stat-box"><div class="stat-label">累计收益率</div><div class="stat-value" id="totalReturn">0%</div></div>
       </div>
-      <div class="chart-container">
-        <canvas id="netValueChart"></canvas>
-      </div>
+      <div class="chart-container"><canvas id="netValueChart"></canvas></div>
     </div>
 
     <!-- 交易列表 -->
@@ -101,7 +99,7 @@
 
   <div class="float-btn" onclick="openAddModal()">+</div>
 
-  <!-- 新增/编辑模态框 -->
+  <!-- 模态框 -->
   <div class="modal" id="tradeModal">
     <div class="modal-content">
       <h3 id="modalTitle">新增交易</h3>
@@ -196,13 +194,12 @@
       document.getElementById('tradeModal').classList.remove('active');
     }
 
-    // ========== 保存交易（含日期校验） ==========
+    // ========== 保存交易（日期校验） ==========
     function saveTrade(event) {
       event.preventDefault();
       const id = document.getElementById('editId').value || Date.now().toString();
       const buyDate = document.getElementById('buyDate').value;
       const sellDate = document.getElementById('sellDate').value;
-      // 日期校验：如果填写了卖出日期，必须晚于买入日期
       if (sellDate && new Date(sellDate) <= new Date(buyDate)) {
         alert('卖出日期必须晚于买入日期！');
         return;
@@ -237,14 +234,12 @@
       saveRecords(records);
     }
 
-    // ========== 计算单笔盈亏（区分已平仓和浮动） ==========
+    // ========== 盈亏计算 ==========
     function calcTrade(t, useCurrentPrice = false) {
       const buyAmount = t.buyPrice * t.quantity;
       const sellPrice = (t.sellDate && t.sellPrice) ? t.sellPrice : (useCurrentPrice ? (t.currentPrice || 0) : 0);
       const sellAmount = sellPrice * t.quantity;
-      const netPnl = sellAmount - buyAmount 
-                     - (t.buyExpense || 0) - (t.sellExpense || 0) 
-                     - (t.otherCost || 0);
+      const netPnl = sellAmount - buyAmount - (t.buyExpense || 0) - (t.sellExpense || 0) - (t.otherCost || 0);
       const pnlPercent = buyAmount ? (netPnl / buyAmount) : 0;
       let holdDays = null;
       if (t.buyDate && t.sellDate) {
@@ -252,17 +247,16 @@
       } else if (t.buyDate) {
         holdDays = Math.round((new Date() - new Date(t.buyDate)) / (1000 * 60 * 60 * 24));
       }
-      return { buyAmount, sellAmount, netPnl, pnlPercent, holdDays, isClosed: !!t.sellDate };
+      return { buyAmount, sellAmount, netPnl, pnlPercent, holdDays };
     }
 
-    // ========== 渲染列表（带筛选/排序） ==========
+    // ========== 渲染全部 ==========
     function renderAll() {
       const records = getRecords();
       const settings = getSettings();
       document.getElementById('initialCapital').value = settings.capital;
       document.getElementById('capitalDisplay').textContent = `本金 ${settings.capital.toLocaleString()}`;
 
-      // ---- 筛选 & 排序 ----
       const filterStatus = document.getElementById('filterStatus').value;
       const sortBy = document.getElementById('sortBy').value;
       const keyword = document.getElementById('searchKeyword').value.trim().toLowerCase();
@@ -292,7 +286,6 @@
         else return valA < valB ? 1 : -1;
       });
 
-      // ---- 渲染列表 ----
       const listDiv = document.getElementById('tradeList');
       if (filtered.length === 0) {
         listDiv.innerHTML = '<div style="text-align:center;padding:20px;color:#999">暂无记录</div>';
@@ -313,16 +306,13 @@
               <div style="text-align:right">
                 <div class="${pnlClass}" style="font-weight:bold">${c.netPnl >= 0 ? '+' : ''}${pnlStr}</div>
                 <div style="font-size:0.7rem">${(c.pnlPercent*100).toFixed(2)}%</div>
-                <div class="trade-actions">
-                  <button class="danger" style="padding:4px 8px; font-size:0.7rem; margin-top:4px" onclick="event.stopPropagation(); deleteTrade('${r.id}')">删除</button>
-                </div>
+                <button class="danger" style="padding:4px 8px; font-size:0.7rem; margin-top:4px" onclick="event.stopPropagation(); deleteTrade('${r.id}')">删除</button>
               </div>
             </div>`;
         }).join('');
       }
       document.getElementById('recordCount').textContent = filtered.length + ' 笔';
 
-      // ---- 统计（全部记录） ----
       const closedTrades = records.filter(r => r.sellDate);
       const totalTrades = closedTrades.length;
       const winTrades = closedTrades.filter(r => calcTrade(r, false).netPnl > 0);
@@ -344,7 +334,6 @@
       document.getElementById('profitLossRatio').textContent = profitLossRatio.toFixed(2);
       document.getElementById('totalReturn').textContent = (totalReturn * 100).toFixed(2) + '%';
 
-      // ---- 最大回撤（仅已平仓） ----
       const sortedClosed = [...closedTrades].sort((a, b) => (a.sellDate || '').localeCompare(b.sellDate || ''));
       const netValues = [1];
       let assets = settings.capital;
@@ -360,11 +349,10 @@
       });
       document.getElementById('maxDrawdown').textContent = (maxDD * 100).toFixed(2) + '%';
 
-      // ---- 净值图表 ----
       const ctx = document.getElementById('netValueChart').getContext('2d');
-      if (netValueChart) netValueChart.destroy();
+      if (window.netValueChart) window.netValueChart.destroy();
       const labels = ['起始', ...sortedClosed.map((_, i) => i + 1)];
-      netValueChart = new Chart(ctx, {
+      window.netValueChart = new Chart(ctx, {
         type: 'line',
         data: {
           labels: labels,
@@ -387,7 +375,7 @@
       });
     }
 
-    // ========== CSV 导出 ==========
+    // ========== CSV 导入导出 ==========
     function exportCSV() {
       const records = getRecords();
       const headers = ['序号','买入日期','卖出日期','股票代码','股票名称','买入价','卖出价','当前市价','数量（股）',
@@ -412,7 +400,6 @@
       link.click();
     }
 
-    // ========== CSV 导入 ==========
     function importCSV() {
       const input = document.createElement('input');
       input.type = 'file';
@@ -453,7 +440,6 @@
       input.click();
     }
 
-    // ========== 清空数据（带自动备份） ==========
     function clearAllData() {
       const records = getRecords();
       if (records.length === 0) return alert('暂无数据可清空');
@@ -466,17 +452,14 @@
       }, 500);
     }
 
-    // ========== 设置折叠 ==========
     function toggleSettings() {
       const body = document.getElementById('settingsBody');
       body.style.display = body.style.display === 'none' ? 'block' : 'none';
     }
 
     // ========== 初始化 ==========
-    let netValueChart = null;
     renderAll();
 
-    // 注册 Service Worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').catch(() => {});
