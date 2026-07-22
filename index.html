@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>交易日志与绩效统计</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a73e8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; padding-bottom: 70px; }
+    .header { background: #1a73e8; color: white; padding: 16px; text-align: center; font-size: 1.2rem; font-weight: bold; position: sticky; top: 0; z-index: 10; }
+    .container { padding: 12px; }
+    .card { background: white; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .flex-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .stat-box { text-align: center; flex: 1 1 45%; margin: 4px; background: #f0f4ff; border-radius: 8px; padding: 8px; }
+    .stat-label { font-size: 0.75rem; color: #666; }
+    .stat-value { font-size: 1.1rem; font-weight: 600; }
+    .green { color: #0d904f; }
+    .red { color: #d93025; }
+    button, .btn { background: #1a73e8; color: white; border: none; padding: 10px 14px; border-radius: 8px; font-size: 0.9rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+    button.secondary { background: #e8eaed; color: #333; }
+    button.danger { background: #d93025; }
+    input, select, textarea { width: 100%; padding: 10px; margin: 6px 0 12px; border: 1px solid #dadce0; border-radius: 8px; font-size: 0.9rem; }
+    label { font-size: 0.85rem; font-weight: 500; color: #444; }
+    .trade-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+    .trade-info { flex: 1; cursor: pointer; }
+    .trade-code { font-weight: 600; }
+    .trade-detail { font-size: 0.8rem; color: #666; }
+    .float-btn { position: fixed; bottom: 20px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: #1a73e8; color: white; font-size: 2rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(26,115,232,0.4); z-index: 20; cursor: pointer; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: white; width: 90%; max-height: 80vh; overflow-y: auto; border-radius: 16px; padding: 20px; }
+    .chart-container { height: 220px; margin: 10px 0; }
+    .settings-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .settings-row input { width: 80px; margin: 0; }
+    .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .filter-row select, .filter-row input { width: auto; flex: 1; min-width: 80px; margin: 0; padding: 6px 8px; }
+    .readonly-input { background: #f5f5f5; }
+    .trade-actions { display: flex; gap: 4px; }
+  </style>
+</head>
+<body>
+  <div class="header">📊 交易日志与绩效</div>
+  <div class="container">
+    <!-- 设置卡片 -->
+    <div class="card" id="settingsCard">
+      <div class="flex-row" style="margin-bottom:8px">
+        <strong>⚙️ 参数设置</strong>
+        <button onclick="toggleSettings()" class="secondary" style="padding:6px 10px">展开/收起</button>
+      </div>
+      <div id="settingsBody" style="display:none;">
+        <div class="settings-row">
+          <label>初始本金</label>
+          <input type="number" id="initialCapital" value="50000" step="1000" onchange="saveSettings()">
+        </div>
+        <div class="settings-row">
+          <label>佣金费率 (买/卖)</label>
+          <input type="number" id="feeRate" value="0.00025" step="0.0001" onchange="saveSettings()">
+          <span style="font-size:0.8rem">(万2.5=0.00025)</span>
+        </div>
+        <div class="flex-row" style="margin-top:10px; gap:8px">
+          <button onclick="importCSV()">📥 导入CSV</button>
+          <button onclick="exportCSV()">📤 导出CSV</button>
+          <button onclick="clearAllData()" class="danger">清空数据</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 绩效摘要卡片 -->
+    <div class="card" id="statsCard">
+      <div class="flex-row" style="margin-bottom:6px"><strong>📈 绩效汇总</strong><span id="capitalDisplay" style="font-size:0.8rem"></span></div>
+      <div class="flex-row" id="statsContainer">
+        <div class="stat-box"><div class="stat-label">已实现盈亏</div><div class="stat-value" id="totalPnl">0</div></div>
+        <div class="stat-box"><div class="stat-label">含浮动盈亏</div><div class="stat-value" id="totalPnlWithFloat">0</div></div>
+        <div class="stat-box"><div class="stat-label">总笔数</div><div class="stat-value" id="totalTrades">0</div></div>
+        <div class="stat-box"><div class="stat-label">胜率</div><div class="stat-value" id="winRate">0%</div></div>
+        <div class="stat-box"><div class="stat-label">盈亏比</div><div class="stat-value" id="profitLossRatio">-</div></div>
+        <div class="stat-box"><div class="stat-label">最大回撤</div><div class="stat-value red" id="maxDrawdown">0%</div></div>
+        <div class="stat-box"><div class="stat-label">累计收益率</div><div class="stat-value" id="totalReturn">0%</div></div>
+      </div>
+      <div class="chart-container">
+        <canvas id="netValueChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 交易列表 -->
+    <div class="card">
+      <div class="flex-row"><strong>📋 交易记录</strong><span style="font-size:0.8rem;color:#666" id="recordCount">0 笔</span></div>
+      <!-- 筛选/排序行 -->
+      <div class="filter-row">
+        <select id="filterStatus" onchange="renderAll()">
+          <option value="all">全部</option>
+          <option value="closed">已平仓</option>
+          <option value="open">持仓中</option>
+        </select>
+        <select id="sortBy" onchange="renderAll()">
+          <option value="sellDate-desc">卖出日期 (新→旧)</option>
+          <option value="sellDate-asc">卖出日期 (旧→新)</option>
+          <option value="pnl-desc">盈亏 (高→低)</option>
+          <option value="pnl-asc">盈亏 (低→高)</option>
+        </select>
+        <input type="text" id="searchKeyword" placeholder="搜索股票代码/名称" oninput="renderAll()" style="flex:2; min-width:120px;">
+      </div>
+      <div id="tradeList"></div>
+    </div>
+  </div>
+
+  <div class="float-btn" onclick="openAddModal()">+</div>
+
+  <!-- 新增/编辑模态框 -->
+  <div class="modal" id="tradeModal">
+    <div class="modal-content">
+      <h3 id="modalTitle">新增交易</h3>
+      <form id="tradeForm" onsubmit="saveTrade(event)">
+        <input type="hidden" id="editId">
+        <label>股票代码 *</label><input type="text" id="stockCode" required>
+        <label>股票名称</label><input type="text" id="stockName">
+        <label>买入日期 *</label><input type="date" id="buyDate" required>
+        <label>卖出日期 (留空表示持仓中)</label><input type="date" id="sellDate">
+        <label>买入价 *</label><input type="number" id="buyPrice" step="0.01" required onchange="calcAuto()">
+        <label>卖出价 (平仓时填写)</label><input type="number" id="sellPrice" step="0.01" onchange="calcAuto()">
+        <label>当前市价 (用于持仓浮动盈亏)</label><input type="number" id="currentPrice" step="0.01" value="0">
+        <label>数量(股) *</label><input type="number" id="quantity" step="1" required onchange="calcAuto()">
+        <label>买入佣金 (自动估算)</label><input type="number" id="buyFee" step="0.01" value="0" readonly class="readonly-input">
+        <label>买入杂费 (印花税/过户费/杂项)</label><input type="number" id="buyMiscFee" step="0.01" value="0" placeholder="手动填写">
+        <label>卖出佣金 (自动估算)</label><input type="number" id="sellFee" step="0.01" value="0" readonly class="readonly-input">
+        <label>卖出杂费 (印花税/过户费/杂项)</label><input type="number" id="sellMiscFee" step="0.01" value="0" placeholder="手动填写">
+        <label>其他额外成本</label><input type="number" id="otherCost" step="0.01" value="0">
+        <label>卖出类型</label>
+        <select id="sellType">
+          <option value="止盈">止盈</option>
+          <option value="止损">止损</option>
+          <option value="强制平仓">强制平仓</option>
+          <option value="其它">其它</option>
+        </select>
+        <label>备注</label><textarea id="remark" rows="2"></textarea>
+        <div style="display:flex; gap:8px; margin-top:16px">
+          <button type="submit">保存</button>
+          <button type="button" onclick="closeModal()" class="secondary">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    // ========== 数据管理 ==========
+    const STORAGE_KEY = 'tradeRecords';
+    const SETTINGS_KEY = 'tradeSettings';
+
+    function getRecords() {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    }
+    function saveRecords(records) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      renderAll();
+    }
+    function getSettings() {
+      const def = { capital: 50000, feeRate: 0.00025 };
+      return JSON.parse(localStorage.getItem(SETTINGS_KEY) || JSON.stringify(def));
+    }
+    function saveSettings() {
+      const capital = parseFloat(document.getElementById('initialCapital').value) || 50000;
+      const feeRate = parseFloat(document.getElementById('feeRate').value) || 0.00025;
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ capital, feeRate }));
+      renderAll();
+    }
+
+    // ========== 自动计算佣金（不覆盖杂费） ==========
+    function calcAuto() {
+      const buyPrice = parseFloat(document.getElementById('buyPrice').value) || 0;
+      const sellPrice = parseFloat(document.getElementById('sellPrice').value) || 0;
+      const qty = parseInt(document.getElementById('quantity').value) || 0;
+      const buyAmount = buyPrice * qty;
+      const sellAmount = sellPrice * qty;
+      const feeRate = getSettings().feeRate;
+      document.getElementById('buyFee').value = (buyAmount * feeRate).toFixed(2);
+      document.getElementById('sellFee').value = (sellAmount * feeRate).toFixed(2);
+    }
+
+    // ========== 模态框 ==========
+    function openAddModal() {
+      document.getElementById('modalTitle').textContent = '新增交易';
+      document.getElementById('tradeForm').reset();
+      document.getElementById('editId').value = '';
+      document.getElementById('buyDate').valueAsDate = new Date();
+      document.getElementById('sellDate').value = '';
+      document.getElementById('currentPrice').value = '0';
+      document.getElementById('buyFee').value = '0';
+      document.getElementById('sellFee').value = '0';
+      document.getElementById('buyMiscFee').value = '0';
+      document.getElementById('sellMiscFee').value = '0';
+      document.getElementById('otherCost').value = '0';
+      document.getElementById('tradeModal').classList.add('active');
+    }
+    function openEditModal(id) {
+      const records = getRecords();
+      const r = records.find(t => t.id === id);
+      if (!r) return;
+      document.getElementById('modalTitle').textContent = '编辑交易';
+      document.getElementById('editId').value = r.id;
+      document.getElementById('stockCode').value = r.stockCode || '';
+      document.getElementById('stockName').value = r.stockName || '';
+      document.getElementById('buyDate').value = r.buyDate || '';
+      document.getElementById('sellDate').value = r.sellDate || '';
+      document.getElementById('currentPrice').value = r.currentPrice || 0;
+      document.getElementById('buyPrice').value = r.buyPrice || '';
+      document.getElementById('sellPrice').value = r.sellPrice || '';
+      document.getElementById('quantity').value = r.quantity || '';
+      document.getElementById('buyFee').value = r.buyFee || 0;
+      document.getElementById('sellFee').value = r.sellFee || 0;
+      document.getElementById('buyMiscFee').value = r.buyMiscFee || 0;
+      document.getElementById('sellMiscFee').value = r.sellMiscFee || 0;
+      document.getElementById('otherCost').value = r.otherCost || 0;
+      document.getElementById('sellType').value = r.sellType || '止盈';
+      document.getElementById('remark').value = r.remark || '';
+      document.getElementById('tradeModal').classList.add('active');
+      calcAuto();
+    }
+    function closeModal() {
+      document.getElementById('tradeModal').classList.remove('active');
+    }
+
+    // ========== 保存交易（含日期校验） ==========
+    function saveTrade(event) {
+      event.preventDefault();
+      const id = document.getElementById('editId').value || Date.now().toString();
+      const buyDate = document.getElementById('buyDate').value;
+      const sellDate = document.getElementById('sellDate').value;
+      // 日期校验：如果填写了卖出日期，必须晚于买入日期
+      if (sellDate && new Date(sellDate) <= new Date(buyDate)) {
+        alert('卖出日期必须晚于买入日期！');
+        return;
+      }
+      const records = getRecords();
+      const existingIndex = records.findIndex(r => r.id === id);
+      const trade = {
+        id,
+        stockCode: document.getElementById('stockCode').value.trim(),
+        stockName: document.getElementById('stockName').value.trim(),
+        buyDate: buyDate,
+        sellDate: sellDate || null,
+        currentPrice: parseFloat(document.getElementById('currentPrice').value) || 0,
+        buyPrice: parseFloat(document.getElementById('buyPrice').value) || 0,
+        sellPrice: parseFloat(document.getElementById('sellPrice').value) || 0,
+        quantity: parseInt(document.getElementById('quantity').value) || 0,
+        buyFee: parseFloat(document.getElementById('buyFee').value) || 0,
+        sellFee: parseFloat(document.getElementById('sellFee').value) || 0,
+        buyMiscFee: parseFloat(document.getElementById('buyMiscFee').value) || 0,
+        sellMiscFee: parseFloat(document.getElementById('sellMiscFee').value) || 0,
+        otherCost: parseFloat(document.getElementById('otherCost').value) || 0,
+        sellType: document.getElementById('sellType').value,
+        remark: document.getElementById('remark').value
+      };
+      if (existingIndex >= 0) records[existingIndex] = trade;
+      else records.push(trade);
+      saveRecords(records);
+      closeModal();
+    }
+
+    function deleteTrade(id) {
+      if (!confirm('确定删除该笔交易吗？')) return;
+      const records = getRecords().filter(r => r.id !== id);
+      saveRecords(records);
+    }
+
+    // ========== 计算单笔盈亏（区分已平仓和浮动） ==========
+    function calcTrade(t, useCurrentPrice = false) {
+      const buyAmount = t.buyPrice * t.quantity;
+      const sellPrice = (t.sellDate && t.sellPrice) ? t.sellPrice : (useCurrentPrice ? (t.currentPrice || 0) : 0);
+      const sellAmount = sellPrice * t.quantity;
+      const netPnl = sellAmount - buyAmount - t.buyFee - t.sellFee
+                     - (t.buyMiscFee || 0) - (t.sellMiscFee || 0)
+                     - (t.otherCost || 0);
+      const pnlPercent = buyAmount ? (netPnl / buyAmount) : 0;
+      let holdDays = null;
+      if (t.buyDate && t.sellDate) {
+        holdDays = Math.round((new Date(t.sellDate) - new Date(t.buyDate)) / (1000 * 60 * 60 * 24));
+      } else if (t.buyDate) {
+        holdDays = Math.round((new Date() - new Date(t.buyDate)) / (1000 * 60 * 60 * 24));
+      }
+      return { buyAmount, sellAmount, netPnl, pnlPercent, holdDays, isClosed: !!t.sellDate };
+    }
+
+    // ========== 渲染列表（带筛选/排序） ==========
+    function renderAll() {
+      const records = getRecords();
+      const settings = getSettings();
+      document.getElementById('initialCapital').value = settings.capital;
+      document.getElementById('feeRate').value = settings.feeRate;
+      document.getElementById('capitalDisplay').textContent = `本金 ${settings.capital.toLocaleString()}`;
+
+      // ---- 筛选 & 排序 ----
+      const filterStatus = document.getElementById('filterStatus').value;
+      const sortBy = document.getElementById('sortBy').value;
+      const keyword = document.getElementById('searchKeyword').value.trim().toLowerCase();
+
+      let filtered = records.filter(r => {
+        // 状态筛选
+        if (filterStatus === 'closed' && !r.sellDate) return false;
+        if (filterStatus === 'open' && r.sellDate) return false;
+        // 关键词搜索
+        if (keyword) {
+          const code = (r.stockCode || '').toLowerCase();
+          const name = (r.stockName || '').toLowerCase();
+          if (!code.includes(keyword) && !name.includes(keyword)) return false;
+        }
+        return true;
+      });
+
+      // 排序
+      const [field, order] = sortBy.split('-');
+      filtered.sort((a, b) => {
+        let valA, valB;
+        if (field === 'sellDate') {
+          valA = a.sellDate || '9999-12-31';
+          valB = b.sellDate || '9999-12-31';
+        } else if (field === 'pnl') {
+          valA = calcTrade(a, true).netPnl;
+          valB = calcTrade(b, true).netPnl;
+        }
+        if (order === 'asc') return valA > valB ? 1 : -1;
+        else return valA < valB ? 1 : -1;
+      });
+
+      // ---- 渲染列表 ----
+      const listDiv = document.getElementById('tradeList');
+      if (filtered.length === 0) {
+        listDiv.innerHTML = '<div style="text-align:center;padding:20px;color:#999">暂无记录</div>';
+      } else {
+        listDiv.innerHTML = filtered.map(r => {
+          const c = calcTrade(r, true);
+          const pnlClass = c.netPnl >= 0 ? 'green' : 'red';
+          const pnlStr = (c.netPnl || 0).toFixed(2);
+          const holdStr = r.sellDate ? (c.holdDays + '天') : '持仓中';
+          const statusTag = r.sellDate ? '' : ' 🟢';
+          return `
+            <div class="trade-item">
+              <div class="trade-info" onclick="openEditModal('${r.id}')">
+                <div class="trade-code">${r.stockCode || '--'} ${r.stockName || ''}${statusTag}</div>
+                <div class="trade-detail">${r.buyDate} → ${r.sellDate || '--'} | ${holdStr}</div>
+                <div class="trade-detail">${r.sellType || ''} | 数量 ${r.quantity}</div>
+              </div>
+              <div style="text-align:right">
+                <div class="${pnlClass}" style="font-weight:bold">${c.netPnl >= 0 ? '+' : ''}${pnlStr}</div>
+                <div style="font-size:0.7rem">${(c.pnlPercent*100).toFixed(2)}%</div>
+                <div class="trade-actions">
+                  <button class="danger" style="padding:4px 8px; font-size:0.7rem; margin-top:4px" onclick="event.stopPropagation(); deleteTrade('${r.id}')">删除</button>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+      }
+      document.getElementById('recordCount').textContent = filtered.length + ' 笔';
+
+      // ---- 统计（全部记录） ----
+      const closedTrades = records.filter(r => r.sellDate);
+      const totalTrades = closedTrades.length;
+      const winTrades = closedTrades.filter(r => calcTrade(r, false).netPnl > 0);
+      const lossTrades = closedTrades.filter(r => calcTrade(r, false).netPnl < 0);
+      const totalPnl = closedTrades.reduce((sum, r) => sum + calcTrade(r, false).netPnl, 0);
+      // 含浮动盈亏（所有记录用当前价或卖出价）
+      const totalPnlWithFloat = records.reduce((sum, r) => sum + calcTrade(r, true).netPnl, 0);
+      const winRate = totalTrades ? (winTrades.length / totalTrades) : 0;
+      const avgWin = winTrades.length ? winTrades.reduce((s, r) => s + calcTrade(r, false).netPnl, 0) / winTrades.length : 0;
+      const avgLoss = lossTrades.length ? lossTrades.reduce((s, r) => s + calcTrade(r, false).netPnl, 0) / lossTrades.length : 0;
+      const profitLossRatio = avgLoss ? Math.abs(avgWin / avgLoss) : 0;
+      const totalReturn = settings.capital ? totalPnl / settings.capital : 0;
+
+      document.getElementById('totalPnl').textContent = totalPnl.toFixed(2);
+      document.getElementById('totalPnl').className = 'stat-value ' + (totalPnl >= 0 ? 'green' : 'red');
+      document.getElementById('totalPnlWithFloat').textContent = totalPnlWithFloat.toFixed(2);
+      document.getElementById('totalPnlWithFloat').className = 'stat-value ' + (totalPnlWithFloat >= 0 ? 'green' : 'red');
+      document.getElementById('totalTrades').textContent = totalTrades;
+      document.getElementById('winRate').textContent = (winRate * 100).toFixed(1) + '%';
+      document.getElementById('profitLossRatio').textContent = profitLossRatio.toFixed(2);
+      document.getElementById('totalReturn').textContent = (totalReturn * 100).toFixed(2) + '%';
+
+      // ---- 最大回撤（仅已平仓，用已实现盈亏） ----
+      const sortedClosed = [...closedTrades].sort((a, b) => (a.sellDate || '').localeCompare(b.sellDate || ''));
+      const netValues = [1];
+      let assets = settings.capital;
+      let peak = settings.capital;
+      let maxDD = 0;
+      sortedClosed.forEach(t => {
+        assets += calcTrade(t, false).netPnl;
+        const netVal = assets / settings.capital;
+        netValues.push(netVal);
+        if (netVal > peak) peak = netVal;
+        const dd = (netVal - peak) / peak;
+        if (dd < maxDD) maxDD = dd;
+      });
+      document.getElementById('maxDrawdown').textContent = (maxDD * 100).toFixed(2) + '%';
+
+      // ---- 净值图表 ----
+      const ctx = document.getElementById('netValueChart').getContext('2d');
+      if (netValueChart) netValueChart.destroy();
+      const labels = ['起始', ...sortedClosed.map((_, i) => i + 1)];
+      netValueChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '累计净值',
+            data: netValues,
+            borderColor: '#1a73e8',
+            backgroundColor: 'rgba(26,115,232,0.1)',
+            fill: true,
+            tension: 0.2,
+            pointRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { min: Math.min(0.8, ...netValues) } }
+        }
+      });
+    }
+
+    // ========== CSV 导出（含新字段） ==========
+    function exportCSV() {
+      const records = getRecords();
+      const headers = ['序号','买入日期','卖出日期','股票代码','股票名称','买入价','卖出价','当前市价','数量（股）',
+                      '买入金额','卖出金额','买入佣金','卖出佣金','买入杂费','卖出杂费','其他成本',
+                      '净盈亏','盈亏比例','持有天数','卖出类型','备注'];
+      const rows = records.map((r, i) => {
+        const c = calcTrade(r, true);
+        return [
+          i+1, r.buyDate||'', r.sellDate||'', r.stockCode, r.stockName,
+          r.buyPrice, r.sellPrice, r.currentPrice||0, r.quantity,
+          c.buyAmount.toFixed(2), c.sellAmount.toFixed(2),
+          r.buyFee, r.sellFee, r.buyMiscFee||0, r.sellMiscFee||0, r.otherCost||0,
+          c.netPnl.toFixed(2), c.pnlPercent,
+          c.holdDays ?? '', r.sellType, r.remark||''
+        ];
+      });
+      const csvContent = Papa.unparse({ fields: headers, data: rows });
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `交易记录_${new Date().toISOString().slice(0,10)}.csv`;
+      link.click();
+    }
+
+    // ========== CSV 导入（兼容新字段） ==========
+    function importCSV() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv';
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            const newRecords = results.data.map(row => ({
+              id: Date.now().toString() + Math.random(),
+              stockCode: row['股票代码'] || '',
+              stockName: row['股票名称'] || '',
+              buyDate: row['买入日期'] || '',
+              sellDate: row['卖出日期'] || null,
+              currentPrice: parseFloat(row['当前市价']) || 0,
+              buyPrice: parseFloat(row['买入价']) || 0,
+              sellPrice: parseFloat(row['卖出价']) || 0,
+              quantity: parseInt(row['数量（股）']) || 0,
+              buyFee: parseFloat(row['买入佣金']) || 0,
+              sellFee: parseFloat(row['卖出佣金']) || 0,
+              buyMiscFee: parseFloat(row['买入杂费']) || 0,
+              sellMiscFee: parseFloat(row['卖出杂费']) || 0,
+              otherCost: parseFloat(row['其他成本']) || 0,
+              sellType: row['卖出类型'] || '',
+              remark: row['备注'] || ''
+            })).filter(r => r.stockCode || r.buyDate);
+            if (newRecords.length === 0) return alert('未解析到有效记录');
+            if (confirm(`将导入 ${newRecords.length} 条记录，是否覆盖现有数据？点“取消”则追加。`)) {
+              saveRecords(newRecords);
+            } else {
+              const existing = getRecords();
+              saveRecords([...existing, ...newRecords]);
+            }
+          }
+        });
+      };
+      input.click();
+    }
+
+    // ========== 清空数据（带自动备份） ==========
+    function clearAllData() {
+      const records = getRecords();
+      if (records.length === 0) return alert('暂无数据可清空');
+      if (!confirm('确定删除全部交易记录吗？点击“确定”将先导出备份再清空。')) return;
+      // 自动导出备份
+      exportCSV();
+      setTimeout(() => {
+        if (confirm('备份已下载，是否继续清空本地数据？')) {
+          saveRecords([]);
+        }
+      }, 500);
+    }
+
+    // ========== 设置折叠 ==========
+    function toggleSettings() {
+      const body = document.getElementById('settingsBody');
+      body.style.display = body.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // ========== 初始化 ==========
+    let netValueChart = null;
+    renderAll();
+
+    // 注册 Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
