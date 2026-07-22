@@ -36,7 +36,6 @@
     .settings-row input { width: 80px; margin: 0; }
     .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
     .filter-row select, .filter-row input { width: auto; flex: 1; min-width: 80px; margin: 0; padding: 6px 8px; }
-    .readonly-input { background: #f5f5f5; }
     .trade-actions { display: flex; gap: 4px; }
   </style>
 </head>
@@ -53,11 +52,6 @@
         <div class="settings-row">
           <label>初始本金</label>
           <input type="number" id="initialCapital" value="50000" step="1000" onchange="saveSettings()">
-        </div>
-        <div class="settings-row">
-          <label>佣金费率 (买/卖)</label>
-          <input type="number" id="feeRate" value="0.00025" step="0.0001" onchange="saveSettings()">
-          <span style="font-size:0.8rem">(万2.5=0.00025)</span>
         </div>
         <div class="flex-row" style="margin-top:10px; gap:8px">
           <button onclick="importCSV()">📥 导入CSV</button>
@@ -87,7 +81,6 @@
     <!-- 交易列表 -->
     <div class="card">
       <div class="flex-row"><strong>📋 交易记录</strong><span style="font-size:0.8rem;color:#666" id="recordCount">0 笔</span></div>
-      <!-- 筛选/排序行 -->
       <div class="filter-row">
         <select id="filterStatus" onchange="renderAll()">
           <option value="all">全部</option>
@@ -118,14 +111,12 @@
         <label>股票名称</label><input type="text" id="stockName">
         <label>买入日期 *</label><input type="date" id="buyDate" required>
         <label>卖出日期 (留空表示持仓中)</label><input type="date" id="sellDate">
-        <label>买入价 *</label><input type="number" id="buyPrice" step="0.01" required onchange="calcAuto()">
-        <label>卖出价 (平仓时填写)</label><input type="number" id="sellPrice" step="0.01" onchange="calcAuto()">
+        <label>买入价 *</label><input type="number" id="buyPrice" step="0.01" required>
+        <label>卖出价 (平仓时填写)</label><input type="number" id="sellPrice" step="0.01">
         <label>当前市价 (用于持仓浮动盈亏)</label><input type="number" id="currentPrice" step="0.01" value="0">
-        <label>数量(股) *</label><input type="number" id="quantity" step="1" required onchange="calcAuto()">
-        <label>买入佣金 (自动估算)</label><input type="number" id="buyFee" step="0.01" value="0" readonly class="readonly-input">
-        <label>买入杂费 (印花税/过户费/杂项)</label><input type="number" id="buyMiscFee" step="0.01" value="0" placeholder="手动填写">
-        <label>卖出佣金 (自动估算)</label><input type="number" id="sellFee" step="0.01" value="0" readonly class="readonly-input">
-        <label>卖出杂费 (印花税/过户费/杂项)</label><input type="number" id="sellMiscFee" step="0.01" value="0" placeholder="手动填写">
+        <label>数量(股) *</label><input type="number" id="quantity" step="1" required>
+        <label>买入费用 (总，含佣金/印花税/过户费等)</label><input type="number" id="buyExpense" step="0.01" value="0">
+        <label>卖出费用 (总，含佣金/印花税/过户费等)</label><input type="number" id="sellExpense" step="0.01" value="0">
         <label>其他额外成本</label><input type="number" id="otherCost" step="0.01" value="0">
         <label>卖出类型</label>
         <select id="sellType">
@@ -158,26 +149,13 @@
       renderAll();
     }
     function getSettings() {
-      const def = { capital: 50000, feeRate: 0.00025 };
+      const def = { capital: 50000 };
       return JSON.parse(localStorage.getItem(SETTINGS_KEY) || JSON.stringify(def));
     }
     function saveSettings() {
       const capital = parseFloat(document.getElementById('initialCapital').value) || 50000;
-      const feeRate = parseFloat(document.getElementById('feeRate').value) || 0.00025;
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ capital, feeRate }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ capital }));
       renderAll();
-    }
-
-    // ========== 自动计算佣金（不覆盖杂费） ==========
-    function calcAuto() {
-      const buyPrice = parseFloat(document.getElementById('buyPrice').value) || 0;
-      const sellPrice = parseFloat(document.getElementById('sellPrice').value) || 0;
-      const qty = parseInt(document.getElementById('quantity').value) || 0;
-      const buyAmount = buyPrice * qty;
-      const sellAmount = sellPrice * qty;
-      const feeRate = getSettings().feeRate;
-      document.getElementById('buyFee').value = (buyAmount * feeRate).toFixed(2);
-      document.getElementById('sellFee').value = (sellAmount * feeRate).toFixed(2);
     }
 
     // ========== 模态框 ==========
@@ -188,10 +166,8 @@
       document.getElementById('buyDate').valueAsDate = new Date();
       document.getElementById('sellDate').value = '';
       document.getElementById('currentPrice').value = '0';
-      document.getElementById('buyFee').value = '0';
-      document.getElementById('sellFee').value = '0';
-      document.getElementById('buyMiscFee').value = '0';
-      document.getElementById('sellMiscFee').value = '0';
+      document.getElementById('buyExpense').value = '0';
+      document.getElementById('sellExpense').value = '0';
       document.getElementById('otherCost').value = '0';
       document.getElementById('tradeModal').classList.add('active');
     }
@@ -209,15 +185,12 @@
       document.getElementById('buyPrice').value = r.buyPrice || '';
       document.getElementById('sellPrice').value = r.sellPrice || '';
       document.getElementById('quantity').value = r.quantity || '';
-      document.getElementById('buyFee').value = r.buyFee || 0;
-      document.getElementById('sellFee').value = r.sellFee || 0;
-      document.getElementById('buyMiscFee').value = r.buyMiscFee || 0;
-      document.getElementById('sellMiscFee').value = r.sellMiscFee || 0;
+      document.getElementById('buyExpense').value = r.buyExpense || 0;
+      document.getElementById('sellExpense').value = r.sellExpense || 0;
       document.getElementById('otherCost').value = r.otherCost || 0;
       document.getElementById('sellType').value = r.sellType || '止盈';
       document.getElementById('remark').value = r.remark || '';
       document.getElementById('tradeModal').classList.add('active');
-      calcAuto();
     }
     function closeModal() {
       document.getElementById('tradeModal').classList.remove('active');
@@ -246,10 +219,8 @@
         buyPrice: parseFloat(document.getElementById('buyPrice').value) || 0,
         sellPrice: parseFloat(document.getElementById('sellPrice').value) || 0,
         quantity: parseInt(document.getElementById('quantity').value) || 0,
-        buyFee: parseFloat(document.getElementById('buyFee').value) || 0,
-        sellFee: parseFloat(document.getElementById('sellFee').value) || 0,
-        buyMiscFee: parseFloat(document.getElementById('buyMiscFee').value) || 0,
-        sellMiscFee: parseFloat(document.getElementById('sellMiscFee').value) || 0,
+        buyExpense: parseFloat(document.getElementById('buyExpense').value) || 0,
+        sellExpense: parseFloat(document.getElementById('sellExpense').value) || 0,
         otherCost: parseFloat(document.getElementById('otherCost').value) || 0,
         sellType: document.getElementById('sellType').value,
         remark: document.getElementById('remark').value
@@ -271,8 +242,8 @@
       const buyAmount = t.buyPrice * t.quantity;
       const sellPrice = (t.sellDate && t.sellPrice) ? t.sellPrice : (useCurrentPrice ? (t.currentPrice || 0) : 0);
       const sellAmount = sellPrice * t.quantity;
-      const netPnl = sellAmount - buyAmount - t.buyFee - t.sellFee
-                     - (t.buyMiscFee || 0) - (t.sellMiscFee || 0)
+      const netPnl = sellAmount - buyAmount 
+                     - (t.buyExpense || 0) - (t.sellExpense || 0) 
                      - (t.otherCost || 0);
       const pnlPercent = buyAmount ? (netPnl / buyAmount) : 0;
       let holdDays = null;
@@ -289,7 +260,6 @@
       const records = getRecords();
       const settings = getSettings();
       document.getElementById('initialCapital').value = settings.capital;
-      document.getElementById('feeRate').value = settings.feeRate;
       document.getElementById('capitalDisplay').textContent = `本金 ${settings.capital.toLocaleString()}`;
 
       // ---- 筛选 & 排序 ----
@@ -298,10 +268,8 @@
       const keyword = document.getElementById('searchKeyword').value.trim().toLowerCase();
 
       let filtered = records.filter(r => {
-        // 状态筛选
         if (filterStatus === 'closed' && !r.sellDate) return false;
         if (filterStatus === 'open' && r.sellDate) return false;
-        // 关键词搜索
         if (keyword) {
           const code = (r.stockCode || '').toLowerCase();
           const name = (r.stockName || '').toLowerCase();
@@ -310,7 +278,6 @@
         return true;
       });
 
-      // 排序
       const [field, order] = sortBy.split('-');
       filtered.sort((a, b) => {
         let valA, valB;
@@ -361,7 +328,6 @@
       const winTrades = closedTrades.filter(r => calcTrade(r, false).netPnl > 0);
       const lossTrades = closedTrades.filter(r => calcTrade(r, false).netPnl < 0);
       const totalPnl = closedTrades.reduce((sum, r) => sum + calcTrade(r, false).netPnl, 0);
-      // 含浮动盈亏（所有记录用当前价或卖出价）
       const totalPnlWithFloat = records.reduce((sum, r) => sum + calcTrade(r, true).netPnl, 0);
       const winRate = totalTrades ? (winTrades.length / totalTrades) : 0;
       const avgWin = winTrades.length ? winTrades.reduce((s, r) => s + calcTrade(r, false).netPnl, 0) / winTrades.length : 0;
@@ -378,7 +344,7 @@
       document.getElementById('profitLossRatio').textContent = profitLossRatio.toFixed(2);
       document.getElementById('totalReturn').textContent = (totalReturn * 100).toFixed(2) + '%';
 
-      // ---- 最大回撤（仅已平仓，用已实现盈亏） ----
+      // ---- 最大回撤（仅已平仓） ----
       const sortedClosed = [...closedTrades].sort((a, b) => (a.sellDate || '').localeCompare(b.sellDate || ''));
       const netValues = [1];
       let assets = settings.capital;
@@ -421,11 +387,11 @@
       });
     }
 
-    // ========== CSV 导出（含新字段） ==========
+    // ========== CSV 导出 ==========
     function exportCSV() {
       const records = getRecords();
       const headers = ['序号','买入日期','卖出日期','股票代码','股票名称','买入价','卖出价','当前市价','数量（股）',
-                      '买入金额','卖出金额','买入佣金','卖出佣金','买入杂费','卖出杂费','其他成本',
+                      '买入金额','卖出金额','买入费用','卖出费用','其他成本',
                       '净盈亏','盈亏比例','持有天数','卖出类型','备注'];
       const rows = records.map((r, i) => {
         const c = calcTrade(r, true);
@@ -433,7 +399,7 @@
           i+1, r.buyDate||'', r.sellDate||'', r.stockCode, r.stockName,
           r.buyPrice, r.sellPrice, r.currentPrice||0, r.quantity,
           c.buyAmount.toFixed(2), c.sellAmount.toFixed(2),
-          r.buyFee, r.sellFee, r.buyMiscFee||0, r.sellMiscFee||0, r.otherCost||0,
+          r.buyExpense||0, r.sellExpense||0, r.otherCost||0,
           c.netPnl.toFixed(2), c.pnlPercent,
           c.holdDays ?? '', r.sellType, r.remark||''
         ];
@@ -446,7 +412,7 @@
       link.click();
     }
 
-    // ========== CSV 导入（兼容新字段） ==========
+    // ========== CSV 导入 ==========
     function importCSV() {
       const input = document.createElement('input');
       input.type = 'file';
@@ -468,10 +434,8 @@
               buyPrice: parseFloat(row['买入价']) || 0,
               sellPrice: parseFloat(row['卖出价']) || 0,
               quantity: parseInt(row['数量（股）']) || 0,
-              buyFee: parseFloat(row['买入佣金']) || 0,
-              sellFee: parseFloat(row['卖出佣金']) || 0,
-              buyMiscFee: parseFloat(row['买入杂费']) || 0,
-              sellMiscFee: parseFloat(row['卖出杂费']) || 0,
+              buyExpense: parseFloat(row['买入费用']) || 0,
+              sellExpense: parseFloat(row['卖出费用']) || 0,
               otherCost: parseFloat(row['其他成本']) || 0,
               sellType: row['卖出类型'] || '',
               remark: row['备注'] || ''
@@ -494,7 +458,6 @@
       const records = getRecords();
       if (records.length === 0) return alert('暂无数据可清空');
       if (!confirm('确定删除全部交易记录吗？点击“确定”将先导出备份再清空。')) return;
-      // 自动导出备份
       exportCSV();
       setTimeout(() => {
         if (confirm('备份已下载，是否继续清空本地数据？')) {
